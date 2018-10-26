@@ -1,19 +1,9 @@
 class DependenciesController < ApplicationController
+  WEBHOOK_SECRET = ENV['GITHUB_WEBHOOK_SECRET']
+
   protect_from_forgery with: :null_session
 
-  PRIVATE_KEY = OpenSSL::PKey::RSA.new(ENV['GITHUB_PRIVATE_KEY'].gsub('\n', "\n")) # convert newlines
-  WEBHOOK_SECRET = ENV['GITHUB_WEBHOOK_SECRET']
-  APP_IDENTIFIER = ENV['GITHUB_APP_IDENTIFIER']
-
   def create
-    payload = {
-        iat: Time.now.to_i,
-        exp: Time.now.to_i + (10 * 60),
-        iss: APP_IDENTIFIER
-    }
-    jwt = JWT.encode(payload, PRIVATE_KEY, 'RS256')
-    client = Octokit::Client.new(bearer_token: jwt)
-
     request.body.rewind
     payload_raw = request.body.read # We need the raw text of the body to check the webhook signature
     begin
@@ -34,9 +24,13 @@ class DependenciesController < ApplicationController
 
     case request.env['HTTP_X_GITHUB_EVENT']
     when 'installation'
-      installation_id = payload['installation']['id']
-      installation_token = client.create_app_installation_access_token(installation_id)[:token]
-      puts 'Installation token: ' + installation_token
+      params["repositories"].each do |repository|
+        Repository.create(
+          installation_id: params["installation"]["id"],
+          repo_name: repository["full_name"],
+          directory: "/"
+        )
+      end
     end
 
     render json: {}
