@@ -17,6 +17,8 @@ class Dependency::Checker
   end
 
   def run
+    puts "--- Repository name: #{@repository.repo_name} ---"
+
     payload = {
         iat: Time.now.to_i,
         exp: Time.now.to_i + (10 * 60),
@@ -26,6 +28,18 @@ class Dependency::Checker
     client = Octokit::Client.new(bearer_token: jwt)
 
     installation_token = client.create_app_installation_access_token(@repository.installation_id)[:token]
+
+    if @repository.package_manager.nil?
+      repo_client = Octokit::Client.new(bearer_token: installation_token)
+      case repo_client.languages(@repository.repo_name).first[0].to_s
+      when "JavaScript"
+        @repository.update(package_manager: "npm_and_yarn")
+      when "Ruby"
+        @repository.update(package_manager: "bundler")
+      end
+    end
+
+    puts "--- Package Manager: #{@repository.package_manager} ---"
 
     credentials =
       [{
@@ -85,9 +99,10 @@ class Dependency::Checker
 
       pr_creator.create
 
-      puts "Created PR for: " + dep.name
-    rescue
-      puts "Failed to check dependency: " + dep.name
+      puts "--- SUCCESS: Created PR for: #{dep.name} ---"
+    rescue e
+      puts "--- FAIL: Failed to check dependency: #{dep.name} ---"
+      puts "    #{e.message}"
     end
   end
 end

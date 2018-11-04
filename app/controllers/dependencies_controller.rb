@@ -25,14 +25,33 @@ class DependenciesController < ApplicationController
     case request.env['HTTP_X_GITHUB_EVENT']
     when 'installation'
       params["repositories"].each do |repository|
-        Repository.create(
-          installation_id: params["installation"]["id"],
-          repo_name: repository["full_name"],
-          directory: "/"
-        )
+        if params["action"] == "deleted"
+          delete_repository repository
+        else
+          create_repository(params["installation"], repository)
+        end
+      end
+    when 'installation_repositories'
+      params["repositories_added"].each do |repository|
+        create_repository(params["installation"], repository)
+      end
+      params["repositories_removed"].each do |repository|
+        delete_repository repository
       end
     end
 
     render json: {}
+  end
+
+  private def create_repository(installation, data)
+    Repository.create(
+      installation_id: installation["id"],
+      repo_name: data["full_name"],
+      directory: "/"
+    )
+  end
+
+  private def delete_repository data
+    Repository.where(repo_name: data["full_name"]).destroy_all
   end
 end
